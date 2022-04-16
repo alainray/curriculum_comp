@@ -3,14 +3,13 @@ import torch
 from models import get_model
 from datasets import get_train_data, get_test_loader, preproc
 from utils import AverageMeter, checkpoint, get_args
-from opt import get_opt, get_criterion
+from opt import get_opt, get_criterion, get_scheduler, WarmUpLR
 from train import train, test
 from utils import setup_comet, set_random_state
 from curriculum import curriculum_loader, create_schedule, pacing
 import numpy as np
 from torch.utils.data import DataLoader
-from torchvision.datasets import CIFAR10
-from torchvision.transforms import Compose, ToTensor, Normalize, RandomHorizontalFlip
+
 # Handling parameters to experiments
 args = get_args()
 # Set randomness
@@ -20,7 +19,7 @@ train_data = get_train_data(args)
 schedule = create_schedule(max_iterations=args.iters,sched_type=args.method)
 trainfull_dl = DataLoader(train_data, batch_size=args.test_bs, shuffle=False) 
 if args.method in ['curr','anti']:
-    train_dl = curriculum_loader(train_data, args.b, args, args.method!="curr")
+    train_dl = curriculum_loader(train_data, args.b, args, anticurriculum=args.method!="curr")
 else:
     train_dl = DataLoader(train_data, batch_size=args.train_bs, shuffle=True)
 test_dl = get_test_loader(args)
@@ -28,6 +27,10 @@ test_dl = get_test_loader(args)
 model = get_model(args)
 # Define optimizer
 opt = get_opt(args, model)
+# Define scheduler
+scheduler = get_scheduler(args.scheduler, opt, num_epochs=args.iters)
+
+warmup_scheduler = WarmUpLR(opt, args.warm)
 # Define criterion
 criterion = get_criterion(args)
 # Training setup
@@ -69,7 +72,7 @@ while iteration <= args.iters:
         preds = logits.argmax(dim=1)
         correct = (preds == label).cpu().sum()
         acc_meter.update(correct/float(bs),bs)
-        print(f"\r[TRAIN] Iter: {iteration:04d}-Loss: {loss_meter.avg:.3f} Acc: {100*acc_meter.avg:.2f}%", end="")
+        print(f"\r[TRAIN] Iter: {iteration:04d}-LR{opt.param_groups[0]['lr']:.4f}-Loss: {loss_meter.avg:.3f} Acc: {100*acc_meter.avg:.2f}%", end="")
         metrics = dict()
         metrics['loss'] = loss_meter.avg
         metrics['acc'] = 100*acc_meter.avg
@@ -79,8 +82,14 @@ while iteration <= args.iters:
             print("")
             test(exp, args, model, test_dl, criterion, iteration, prefix="test")
             print("")
-            test(exp, args, model, trainfull_dl, criterion, iteration, prefix="full_train")
+            # test(exp, args, model, trainfull_dl, criterion, iteration, prefix="full_train")
             #checkpoint(args, model, stats, iteration, split="train")'''
             print("")
+
+        if iteration <= args.warm:
+            warmup_scheduler.step()
         iteration+=1
+        
         if iteration > args.iters: break
+    scheduler.step()
+

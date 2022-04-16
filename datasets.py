@@ -57,7 +57,10 @@ def get_datasets(args):
 
 def preproc(dataset, split):
     t = []
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+    if dataset == "cifar100":
+        normalize = transforms.Normalize(mean=[n/255. for n in [129.3, 124.1, 112.4]], std=[n/255. for n in [68.2,  65.4,  70.4]])
+    else:
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225])
     if dataset == "imagenet":
         t.append(transforms.Resize(256))
@@ -68,7 +71,9 @@ def preproc(dataset, split):
             t.extend([transforms.CenterCrop(224)])
     else:
         if split == "train":
-            t.append(transforms.RandomHorizontalFlip())
+            t.extend([transforms.RandomCrop(32, padding=4),
+                      transforms.RandomHorizontalFlip(),
+                      transforms.RandomRotation(15)])
     t.extend([transforms.ToTensor(), normalize])
     return transforms.Compose(t)
 
