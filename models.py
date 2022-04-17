@@ -139,10 +139,10 @@ class ResNet(nn.Module):
 
         return output
 
-def resnet18(**kwargs):
+def resnet18(num_classes=100, **kwargs):
     """ return a ResNet 18 object
     """
-    return ResNet(BasicBlock, [2, 2, 2, 2])
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
 def resnet34():
     """ return a ResNet 34 object
@@ -182,14 +182,14 @@ models = {'resnet18': resnet18,
 def get_model(args):
     pretrained = True if args.pretrained == 1 else False
     freeze = True if args.freeze == 1 else False
-    model = models[args.arch](pretrained=pretrained)
+    model = models[args.arch](num_classes=n_classes[args.train_ds],pretrained=pretrained)
 
-    if freeze:
+    '''if freeze:
         # Freeze layers!
         for param in model.parameters():
             param.requires_grad = False
 
-    model.fc = nn.Linear(in_features[args.arch],n_classes[args.train_ds])
+    model.fc = nn.Linear(in_features[args.arch],n_classes[args.train_ds])'''
     
     return model
 
